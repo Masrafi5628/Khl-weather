@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceLine, Area, AreaChart, ComposedChart, Line,
-  BarChart, Bar, Cell, Scatter,
+  BarChart, Bar, Cell, Scatter, LabelList,
 } from "recharts";
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -429,7 +429,7 @@ function HeatmapCanvas({monthly}){
     canvasRef.current?.toBlob(b=>{
       if(!b)return;
       const a=document.createElement('a');
-      a.href=URL.createObjectURL(b);a.download='Fig7_Monthly_WBGT_Risk.png';
+      a.href=URL.createObjectURL(b);a.download='Fig2.png';
       document.body.appendChild(a);a.click();document.body.removeChild(a);
       setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     },'image/png',1.0);
@@ -438,7 +438,7 @@ function HeatmapCanvas({monthly}){
     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:'20px',marginBottom:20}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
         <div>
-          <div style={{fontSize:9,color:C.accent,letterSpacing:3,textTransform:'uppercase',fontWeight:700,marginBottom:3}}>Fig. 7</div>
+          <div style={{fontSize:9,color:C.accent,letterSpacing:3,textTransform:'uppercase',fontWeight:700,marginBottom:3}}>Fig. 2</div>
           <div style={{fontSize:14,fontWeight:700,color:C.text}}>Monthly WBGT Calendar Heatmap</div>
           <div style={{fontSize:11,color:C.sub,marginTop:2}}>
             Indoor/shaded WBGT · colour-coded by risk category · rows = months, columns = years
@@ -557,11 +557,11 @@ export default function App(){
       {label:'WBGT ≥ 32°C',field:'wbgt',val:32,color:'#ef4444'},
       {label:'WBGT ≥ 35°C',field:'wbgt',val:35,color:'#dc2626'},
     ];
-    return TH.map(t=>({
-      label:t.label,color:t.color,
-      n:data.filter(r=>r[t.field]!=null&&r[t.field]>=t.val).length,
-      pct:data.length?+(data.filter(r=>r[t.field]!=null&&r[t.field]>=t.val).length/data.length*100).toFixed(1):0,
-    }));
+    return TH.map(t=>{
+      const n=data.filter(r=>r[t.field]!=null&&r[t.field]>=t.val).length;
+      const pct=data.length?+(n/data.length*100).toFixed(1):0;
+      return{label:t.label,color:t.color,n,pct,display:n?`${n.toLocaleString()} (${pct}%)`:null};
+    });
   },[data]);
 
   const corr=useMemo(()=>{
@@ -600,12 +600,12 @@ export default function App(){
   const TABS=[
     {id:'overview',   icon:'📊',label:'Overview'         },
     {id:'mk',         icon:'📉',label:'MK Analysis'      },
-    {id:'trends',     icon:'📈',label:'Fig 2–3: Trends'  },
-    {id:'seasonal',   icon:'🌿',label:'Fig 4: Seasonal'  },
-    {id:'exceedance', icon:'⚠️', label:'Fig 5: Exceedance'},
+    {id:'trends',     icon:'📈',label:'Fig 4–5: Trends'  },
+    {id:'seasonal',   icon:'🌿',label:'Fig 7: Seasonal'  },
+    {id:'exceedance', icon:'⚠️', label:'Fig 8: Exceedance'},
     {id:'regression', icon:'📐',label:'Fig 6: Regression'},
-    {id:'heatmap',    icon:'🔥',label:'Fig 7: Heatmap'   },
-    {id:'wetbulb',    icon:'💧',label:'Fig 8: Wet Bulb'  },
+    {id:'heatmap',    icon:'🔥',label:'Fig 2: Heatmap'   },
+    {id:'wetbulb',    icon:'💧',label:'Fig 3: Wet Bulb'  },
     {id:'correlation',icon:'🔗',label:'Correlations'     },
   ];
 
@@ -614,8 +614,8 @@ export default function App(){
 
   // ── Chart theme — font sizes scale with paper mode ────────────
   const tc={
-    grid:pm?'#d1d5db':C.grid,ax:pm?'#1f2937':C.sub,
-    ref35:pm?'#b91c1c':'#ef4444',ref32:pm?'#c2410c':'#f97316',ref28:pm?'#854d0e':'#eab308',
+    grid:pm?'#c9d0d9':C.grid, ax:pm?'#111827':C.sub,
+    ref35:pm?'#7f1d1d':'#ef4444', ref32:pm?'#9a3412':'#f97316', ref28:pm?'#92400e':'#eab308',
   };
   // Consistent professional font sizes: slightly larger in paper mode
   const FS={tick:pm?12:11, axLabel:pm?13:12, legend:pm?12:11, refLabel:pm?10:9};
@@ -628,6 +628,17 @@ export default function App(){
   });
   // X-axis label helper — bottom
   const xLab=(val)=>({value:val,position:'insideBottom',offset:-10,fill:tc.ax,fontSize:FS.axLabel});
+
+  // High-contrast series colours — dark, print-safe in paper mode
+  const SC_tw    = pm ? '#1d4ed8' : C.tw;     // dark navy  / sky blue
+  const SC_wbgt  = pm ? '#b45309' : C.wbgt;   // dark amber / light orange
+  const SC_fig4_wbgt = '#000000';
+  const SC_temp  = pm ? '#166534' : C.temp;   // dark green / yellow (readable on white)
+  const SC_caut  = pm ? '#a16207' : C.caution;
+  const SC_dang  = pm ? '#c2410c' : C.danger;
+  const SC_extr  = pm ? '#991b1b' : C.extreme;
+  const LW = { main:pm?3:2.5, trend:pm?1.8:1.5, ref:pm?2:1.5 }; // line widths
+  const DS = { dot:pm?5:4, scatter:pm?13:11 };                   // dot sizes
 
   const chartBg={background:pm?'#ffffff':'transparent',padding:pm?'20px 12px 8px':0};
 
@@ -870,10 +881,10 @@ export default function App(){
             <>
               {/* FIX: domain [18,36] so 35°C line is visible; label moved to
                   insideBottomLeft so it sits BELOW the line and never clips at top */}
-              <FigSection pm={pm} figNum="Fig. 2"
+              <FigSection pm={pm} figNum="Fig. 4"
                 title="Annual Mean Tw, WBGT (indoor) & Air Temperature"
                 subtitle="Sen's slope trend lines overlaid (dashed) · Bernard & Pourmoghani (1999)"
-                figRef={r2} filename="Fig2_Annual_Trend_Lines.png">
+                figRef={r2} filename="Fig4.png">
                 <div ref={r2} style={chartBg}>
                   <ResponsiveContainer width="100%" height={340}>
                     <ComposedChart data={yearly}
@@ -896,23 +907,23 @@ export default function App(){
                         return(<>
                           <Line type="linear" name="_wbgt_trend"
                             dataKey={y=>+(mk.wbgt.slope*(y.yn-b0)+w0).toFixed(3)}
-                            stroke={C.wbgt} strokeWidth={1.5} strokeDasharray="8 4"
+                            stroke={SC_fig4_wbgt} strokeWidth={LW.trend} strokeDasharray="8 4"
                             dot={false} legendType="none" unit="°C"/>
                           <Line type="linear" name="_tw_trend"
                             dataKey={y=>+(mk.tw.slope*(y.yn-b0)+tw0).toFixed(3)}
-                            stroke={C.tw} strokeWidth={1.5} strokeDasharray="8 4"
+                            stroke={SC_tw} strokeWidth={LW.trend} strokeDasharray="8 4"
                             dot={false} legendType="none" unit="°C"/>
                         </>);
                       })()}
                       <Line type="monotone" dataKey="wbgt" name="WBGT (indoor)"
-                        stroke={C.wbgt} strokeWidth={2.5}
-                        dot={{fill:C.wbgt,r:4,strokeWidth:0}} unit="°C"/>
+                        stroke={SC_fig4_wbgt} strokeWidth={LW.main}
+                        dot={{fill:SC_fig4_wbgt,r:DS.dot,strokeWidth:0}} unit="°C"/>
                       <Line type="monotone" dataKey="tw" name="Avg Tw"
-                        stroke={C.tw} strokeWidth={2.5}
-                        dot={{fill:C.tw,r:4,strokeWidth:0}} unit="°C"/>
+                        stroke={SC_tw} strokeWidth={LW.main}
+                        dot={{fill:SC_tw,r:DS.dot,strokeWidth:0}} unit="°C"/>
                       <Line type="monotone" dataKey="t" name="Air Temp"
-                        stroke={C.temp} strokeWidth={1.8} strokeDasharray="5 3"
-                        dot={{fill:C.temp,r:3,strokeWidth:0}} unit="°C"/>
+                        stroke={SC_temp} strokeWidth={LW.main} strokeDasharray="5 3"
+                        dot={{fill:SC_temp,r:DS.dot,strokeWidth:0}} unit="°C"/>
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -926,16 +937,16 @@ export default function App(){
                 )}
               </FigSection>
 
-              <FigSection pm={pm} figNum="Fig. 3"
+              <FigSection pm={pm} figNum="Fig. 5"
                 title="Annual WBGT Heat Stress Risk Days"
                 subtitle="Stacked area · indoor WBGT thresholds · Bernard & Pourmoghani (1999)"
-                figRef={r3} filename="Fig3_Annual_Danger_Days.png">
+                figRef={r3} filename="Fig5.png">
                 <div ref={r3} style={chartBg}>
                   <ResponsiveContainer width="100%" height={320}>
                     <AreaChart data={yearly}
                       margin={{top:8,right:24,left:8,bottom:36}}>
                       <defs>
-                        {[['aC',C.caution],['aD',C.danger],['aE',C.extreme]].map(([id,col])=>(
+                        {[['aC',SC_caut],['aD',SC_dang],['aE',SC_extr]].map(([id,col])=>(
                           <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%"  stopColor={col} stopOpacity={0.9}/>
                             <stop offset="95%" stopColor={col} stopOpacity={0.65}/>
@@ -949,14 +960,14 @@ export default function App(){
                       <Legend wrapperStyle={legStyle} iconSize={12}
                         verticalAlign="top" height={32}/>
                       <Area type="monotone" dataKey="c" name="Caution 28–32°C"
-                        stackId="a" stroke={C.caution} fill="url(#aC)"
-                        strokeWidth={1.5} unit=" days"/>
+                        stackId="a" stroke={SC_caut} fill="url(#aC)"
+                        strokeWidth={LW.main} unit=" days"/>
                       <Area type="monotone" dataKey="d" name="Danger 32–35°C"
-                        stackId="a" stroke={C.danger} fill="url(#aD)"
-                        strokeWidth={1.5} unit=" days"/>
+                        stackId="a" stroke={SC_dang} fill="url(#aD)"
+                        strokeWidth={LW.main} unit=" days"/>
                       <Area type="monotone" dataKey="e" name="Extreme ≥35°C"
-                        stackId="a" stroke={C.extreme} fill="url(#aE)"
-                        strokeWidth={2} unit=" days"/>
+                        stackId="a" stroke={SC_extr} fill="url(#aE)"
+                        strokeWidth={LW.main} unit=" days"/>
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -969,10 +980,10 @@ export default function App(){
               yOff (14 / 30 / 46 px from top) — they no longer fight at the
               same position and overlap each other.                          */}
           {tab==='seasonal'&&(
-            <FigSection pm={pm} figNum="Fig. 4"
+            <FigSection pm={pm} figNum="Fig. 7"
               title="Seasonal Heat Stress — Dot Plot"
               subtitle="26-year seasonal means · indoor WBGT and Tw · Bernard & Pourmoghani (1999)"
-              figRef={r4} filename="Fig4_Seasonal_WBGT.png">
+              figRef={r4} filename="Fig7.png">
               <div ref={r4} style={chartBg}>
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={seasonal} layout="vertical"
@@ -993,21 +1004,21 @@ export default function App(){
                       strokeDasharray="5 3"
                       label={<RefLineLabel value="Extreme 35°C"
                         fill={tc.ref35} yOff={14}/>}/>
-                    <ReferenceLine x={32} stroke={tc.ref32} strokeWidth={1.5}
+                    <ReferenceLine x={32} stroke={tc.ref32} strokeWidth={LW.ref}
                       strokeDasharray="5 3"
                       label={<RefLineLabel value="Danger 32°C"
                         fill={tc.ref32} yOff={30}/>}/>
-                    <ReferenceLine x={28} stroke={tc.ref28} strokeWidth={1.5}
+                    <ReferenceLine x={28} stroke={tc.ref28} strokeWidth={LW.ref}
                       strokeDasharray="5 3"
                       label={<RefLineLabel value="Caution 28°C"
                         fill={tc.ref28} yOff={46}/>}/>
-                    <Scatter dataKey="avgWbgt" name="WBGT (indoor)" fill={C.wbgt}
-                      shape={p=><circle cx={p.x} cy={p.y} r={11}
-                        fill={C.wbgt} stroke={pm?'#fff':'#080d18'} strokeWidth={2}/>}
+                    <Scatter dataKey="avgWbgt" name="WBGT (indoor)" fill={SC_wbgt}
+                      shape={p=><circle cx={p.x} cy={p.y} r={DS.scatter}
+                        fill={SC_wbgt} stroke={pm?'#fff':'#080d18'} strokeWidth={2}/>}
                       unit="°C"/>
-                    <Scatter dataKey="avgTw" name="Avg Tw" fill={C.tw}
-                      shape={p=><circle cx={p.x} cy={p.y} r={11}
-                        fill={C.tw} stroke={pm?'#fff':'#080d18'} strokeWidth={2}/>}
+                    <Scatter dataKey="avgTw" name="Avg Tw" fill={SC_tw}
+                      shape={p=><circle cx={p.x} cy={p.y} r={DS.scatter}
+                        fill={SC_tw} stroke={pm?'#fff':'#080d18'} strokeWidth={2}/>}
                       unit="°C"/>
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1042,10 +1053,10 @@ export default function App(){
           {/* ══ EXCEEDANCE — Fig 5 ════════════════════════════════ */}
           {/* FIX: right margin 220px so "6,084 (64.1%)" labels never clip */}
           {tab==='exceedance'&&(
-            <FigSection pm={pm} figNum="Fig. 5"
+            <FigSection pm={pm} figNum="Fig. 8"
               title="Threshold Exceedance Frequency"
               subtitle="Indoor WBGT and Tw · matches Table 7 in paper"
-              figRef={r5} filename="Fig5_Exceedance_Frequency.png">
+              figRef={r5} filename="Fig8.png">
               <div ref={r5} style={chartBg}>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={exceed} layout="vertical"
@@ -1057,16 +1068,9 @@ export default function App(){
                     <YAxis type="category" dataKey="label"
                       tick={{...atick,fontSize:FS.tick}} width={110}/>
                     <Tooltip content={<Tip/>}/>
-                    <Bar dataKey="n" name="Days" radius={[0,5,5,0]} unit=" days"
-                      label={({x,y,width,height,value})=>
-                        value?(
-                          <text x={x+width+10} y={y+height/2}
-                            fill={tc.ax} fontSize={FS.tick} fontWeight={600}
-                            textAnchor="start" dominantBaseline="middle">
-                            {value.toLocaleString()} ({data.length?+(value/data.length*100).toFixed(1):0}%)
-                          </text>
-                        ):null
-                      }>
+                    <Bar dataKey="n" name="Days" radius={[0,5,5,0]} unit=" days">
+                      <LabelList dataKey="display" position="right"
+                        style={{fill:tc.ax,fontSize:FS.tick,fontWeight:600}}/>
                       {exceed.map((e,i)=><Cell key={i} fill={e.color}/>)}
                     </Bar>
                   </BarChart>
@@ -1081,34 +1085,35 @@ export default function App(){
             <FigSection pm={pm} figNum="Fig. 6"
               title="OLS Regression of Annual Mean WBGT against Year"
               subtitle="Scatter = observed annual means · dashed red = OLS trend · thin dashed = 95% CI bounds"
-              figRef={r6} filename="Fig6_OLS_Regression.png">
+              figRef={r6} filename="Fig6.png">
               <div ref={r6} style={chartBg}>
                 <ResponsiveContainer width="100%" height={340}>
                   <ComposedChart data={reg.chart}
-                    margin={{top:8,right:24,left:20,bottom:36}}>
+                    margin={{top:8,right:24,left:60,bottom:36}}>
                     <CartesianGrid stroke={tc.grid} strokeDasharray="3 3"/>
                     <XAxis dataKey="year" tick={atick} interval={2}
                       label={xLab('Year')}/>
-                    <YAxis tick={atick} unit="°C" domain={reg.domain} width={80}
-                      label={yLab('Annual mean WBGT (°C)')}/>
+                    <YAxis tick={atick} unit="°C" domain={reg.domain} width={68}
+                      tickFormatter={v=>v.toFixed(1)}
+                      label={yLab('Annual mean WBGT (°C)',{offset:0})}/>
                     <Tooltip content={<Tip/>}/>
                     <Legend wrapperStyle={legStyle} iconSize={12}
                       verticalAlign="top" height={32}/>
                     {/* 95% CI upper and lower bounds — thin dashed, semi-transparent */}
                     <Line type="linear" dataKey="ciHi" name="_ci_hi"
-                      stroke={C.wbgt} strokeWidth={1.2} dot={false}
+                      stroke={SC_wbgt} strokeWidth={1.2} dot={false}
                       strokeDasharray="4 3" opacity={0.55} legendType="none" unit="°C"/>
                     <Line type="linear" dataKey="ciLo" name="_ci_lo"
-                      stroke={C.wbgt} strokeWidth={1.2} dot={false}
+                      stroke={SC_wbgt} strokeWidth={1.2} dot={false}
                       strokeDasharray="4 3" opacity={0.55} legendType="none" unit="°C"/>
                     {/* OLS trend line */}
                     <Line type="linear" dataKey="pred" name="OLS trend"
                       stroke={tc.ref35} strokeWidth={2.5} dot={false}
                       strokeDasharray="10 5" unit="°C"/>
                     {/* Observed data points */}
-                    <Scatter dataKey="wbgt" name="Observed annual WBGT" fill={C.wbgt}
-                      shape={p=><circle cx={p.x} cy={p.y} r={5.5}
-                        fill={C.wbgt} stroke={pm?'#fff':'#080d18'}
+                    <Scatter dataKey="wbgt" name="Observed annual WBGT" fill={SC_wbgt}
+                      shape={p=><circle cx={p.x} cy={p.y} r={DS.dot+1}
+                        fill={SC_wbgt} stroke={pm?'#fff':'#080d18'}
                         strokeWidth={1.5} fillOpacity={0.9}/>}
                       unit="°C"/>
                   </ComposedChart>
@@ -1135,10 +1140,10 @@ export default function App(){
           {/* FIX: 35°C label at insideBottomLeft so it sits below the line
               and is always inside the chart; interval=23 → one tick per 2 years */}
           {tab==='wetbulb'&&(
-            <FigSection pm={pm} figNum="Fig. 8"
+            <FigSection pm={pm} figNum="Fig. 3"
               title="Monthly Mean Wet Bulb Temperature (Tw)"
               subtitle="Stull (2011) formula · red dashed = 35°C physiological survivability limit"
-              figRef={r8} filename="Fig8_Wet_Bulb_Temperature.png">
+              figRef={r8} filename="Fig3.png">
               <div ref={r8} style={chartBg}>
                 <ResponsiveContainer width="100%" height={320}>
                   <AreaChart data={monthly}
@@ -1157,14 +1162,14 @@ export default function App(){
                     <YAxis tick={atick} unit="°C" domain={[10,36]}
                       label={yLab('Wet Bulb Temperature (°C)')}/>
                     <Tooltip content={<Tip/>}/>
-                    <ReferenceLine y={35} stroke={tc.ref35} strokeWidth={2}
+                    <ReferenceLine y={35} stroke={tc.ref35} strokeWidth={LW.ref+0.5}
                       strokeDasharray="7 4"
                       label={{value:'35°C — survivability limit',fill:tc.ref35,
                         fontSize:FS.refLabel,fontWeight:600,
                         position:'insideBottomLeft'}}/>
                     <Area type="monotone" dataKey="tw" name="Monthly mean Tw"
-                      stroke={C.tw} fill="url(#gTw8)"
-                      strokeWidth={2.5} dot={false} unit="°C"/>
+                      stroke={SC_tw} fill="url(#gTw8)"
+                      strokeWidth={LW.main} dot={false} unit="°C"/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
